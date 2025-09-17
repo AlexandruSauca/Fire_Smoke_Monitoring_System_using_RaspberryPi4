@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtualenv
+.venv/
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# VSCode
+.vscode/
+
+# Environment / secrets
+serviceAccountKey.json
+
+Dockerfile
+requirements.txt

@@ -1,0 +1,363 @@
+#!/usr/bin/env python3
+"""
+Complete Servo Control System for Fire/Smoke Detection
+Integrates with web interface via socket on port 8899
+Stops servos for 17 seconds when fire/smoke detected
+"""
+
+import pigpio
+import time
+import math
+import socket
+import json
+import threading
+from datetime import datetime
+
+# ============= CONFIGURATION =============
+# GPIO pins for servos
+SERVO_PAN_GPIO = 12   # GPIO12 (Physical Pin 32)
+SERVO_TILT_GPIO = 13  # GPIO13 (Physical Pin 33)
+
+# Servo pulse width limits (microseconds)
+PAN_MIN = 500
+PAN_MAX = 2500
+PAN_CENTER = 1500
+
+TILT_MIN = 500
+TILT_MAX = 2500
+TILT_CENTER = 1500
+
+# Network configuration
+SERVER_HOST = '0.0.0.0'  # Listen on all interfaces
+SERVER_PORT = 8899       # Port for web interface commands
+
+# Detection hold time
+DETECTION_HOLD_TIME = 17  # seconds
+
+# ============= GLOBAL VARIABLES =============
+pi = None
+is_paused = False
+pause_lock = threading.Lock()
+current_pan_pos = PAN_CENTER
+current_tilt_pos = TILT_CENTER
+scanning_active = True
+server_running = True
+
+# ============= SERVO CONTROL FUNCTIONS =============
+def initialize_pigpio():
+    """Initialize connection to pigpio daemon"""
+    global pi
+    try:
+        pi = pigpio.pi()
+        if not pi.connected:
+            print("❌ Error: pigpio daemon not running")
+            print("Start with: sudo pigpiod")
+            return False
+        
+        print("✅ Connected to pigpio daemon")
+        
+        # Set PWM frequency for better response
+        pi.set_PWM_frequency(SERVO_PAN_GPIO, 100)
+        pi.set_PWM_frequency(SERVO_TILT_GPIO, 100)
+        
+        return True
+    except Exception as e:
+        print(f"❌ Failed to initialize pigpio: {e}")
+        return False
+
+def set_servo_position(gpio_pin, pulse_width):
+    """Safely set servo position"""
+    global current_pan_pos, current_tilt_pos
+    
+    try:
+        # Ensure pulse width is within valid range
+        pulse_width = max(500, min(2500, pulse_width))
+        
+        pi.set_servo_pulsewidth(gpio_pin, pulse_width)
+        
+        # Update position tracking
+        if gpio_pin == SERVO_PAN_GPIO:
+            current_pan_pos = pulse_width
+        elif gpio_pin == SERVO_TILT_GPIO:
+            current_tilt_pos = pulse_width
+            
+    except Exception as e:
+        print(f"Error setting servo position: {e}")
+
+def center_servos():
+    """Move both servos to center position"""
+    print("Centering servos...")
+    set_servo_position(SERVO_PAN_GPIO, PAN_CENTER)
+    set_servo_position(SERVO_TILT_GPIO, TILT_CENTER)
+
+def stop_servos():
+    """Stop sending PWM signals to servos"""
+    pi.set_servo_pulsewidth(SERVO_PAN_GPIO, 0)
+    pi.set_servo_pulsewidth(SERVO_TILT_GPIO, 0)
+
+# ============= MOVEMENT PATTERNS =============
+def circular_scanning():
+    """Continuous circular scanning pattern"""
+    global is_paused, scanning_active
+    
+    steps = 30  # Number of steps in circle
+    radius_pan = 800   # Horizontal radius
+    radius_tilt = 600  # Vertical radius
+    
+    print("🔄 Starting circular scanning pattern...")
+    
+    while scanning_active:
+        for i in range(steps):
+            # Check if paused for detection
+            if is_paused:
+                # Wait while paused
+                while is_paused and scanning_active:
+                    time.sleep(0.1)
+                # When resumed, continue from where we stopped
+                continue
+            
+            if not scanning_active:
+                break
+            
+            # Calculate circular position
+            angle = (2 * math.pi * i) / steps
+            pan_pulse = int(PAN_CENTER + radius_pan * math.cos(angle))
+            tilt_pulse = int(TILT_CENTER + radius_tilt * math.sin(angle))
+            
+            # Apply limits
+            pan_pulse = max(PAN_MIN, min(PAN_MAX, pan_pulse))
+            tilt_pulse = max(TILT_MIN, min(TILT_MAX, tilt_pulse))
+            
+            # Move servos
+            set_servo_position(SERVO_PAN_GPIO, pan_pulse)
+            set_servo_position(SERVO_TILT_GPIO, tilt_pulse)
+            
+            # Speed control
+            time.sleep(0.05)
+        
+        # Small pause between circles
+        if not is_paused:
+            time.sleep(0.2)
+
+# ============= FIRE/SMOKE DETECTION HANDLER =============
+def handle_detection(detection_type, hold_time=None):
+    """
+    Handle fire/smoke detection - STOP servos for specified time
+    
+    Args:
+        detection_type: 'fire' or 'smoke'
+        hold_time: seconds to hold position (default: 17)
+    """
+    global is_paused
+    
+    if hold_time is None:
+        hold_time = DETECTION_HOLD_TIME
+    
+    with pause_lock:
+        if is_paused:
+            print(f"⚠️ Already paused, ignoring new {detection_type} detection")
+            return
+        
+        is_paused = True
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        print(f"\n{'='*50}")
+        print(f"🔥 {detection_type.upper()} DETECTED at {timestamp}")
+        print(f"📸 HOLDING CAMERA POSITION FOR {hold_time} SECONDS")
+        print(f"Position: PAN={current_pan_pos}μs, TILT={current_tilt_pos}μs")
+        print(f"{'='*50}\n")
+        
+        # Hold for specified time
+        time.sleep(hold_time)
+        
+        print(f"✅ Resuming scanning after {hold_time} second hold")
+        is_paused = False
+
+# ============= WEB INTERFACE SOCKET SERVER =============
+def process_command(command_data):
+    """
+    Process commands from web interface
+    
+    Expected commands:
+    - {"type": "fire_detected", "hold_time": 17}
+    - {"type": "smoke_detected", "hold_time": 17}
+    - {"type": "center"}
+    - {"type": "status"}
+    """
+    try:
+        cmd_type = command_data.get('type', '')
+        
+        if cmd_type == 'fire_detected':
+            hold_time = command_data.get('hold_time', DETECTION_HOLD_TIME)
+            # Run in separate thread to not block response
+            detection_thread = threading.Thread(
+                target=handle_detection,
+                args=('fire', hold_time)
+            )
+            detection_thread.daemon = True
+            detection_thread.start()
+            
+            return {
+                "status": "success",
+                "message": f"Fire detected - holding for {hold_time}s",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        elif cmd_type == 'smoke_detected':
+            hold_time = command_data.get('hold_time', DETECTION_HOLD_TIME)
+            # Run in separate thread to not block response
+            detection_thread = threading.Thread(
+                target=handle_detection,
+                args=('smoke', hold_time)
+            )
+            detection_thread.daemon = True
+            detection_thread.start()
+            
+            return {
+                "status": "success",
+                "message": f"Smoke detected - holding for {hold_time}s",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        elif cmd_type == 'center':
+            center_servos()
+            return {
+                "status": "success",
+                "message": "Servos centered"
+            }
+        
+        elif cmd_type == 'status':
+            return {
+                "status": "success",
+                "is_paused": is_paused,
+                "pan_position": current_pan_pos,
+                "tilt_position": current_tilt_pos,
+                "scanning_active": scanning_active
+            }
+        
+        else:
+            return {
+                "status": "error",
+                "message": f"Unknown command: {cmd_type}"
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Command processing error: {str(e)}"
+        }
+
+def socket_server():
+    """Socket server to receive commands from web interface"""
+    global server_running
+    
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.settimeout(1.0)  # Timeout for checking server_running
+    
+    try:
+        server_socket.bind((SERVER_HOST, SERVER_PORT))
+        server_socket.listen(5)
+        print(f"📡 Web interface server listening on {SERVER_HOST}:{SERVER_PORT}")
+        
+        while server_running:
+            try:
+                # Accept connection with timeout
+                client_socket, address = server_socket.accept()
+                client_socket.settimeout(5.0)
+                
+                # Receive data
+                data = client_socket.recv(1024).decode('utf-8')
+                
+                if data:
+                    print(f"📨 Received command from {address[0]}")
+                    
+                    # Parse JSON command
+                    try:
+                        command = json.loads(data)
+                        response = process_command(command)
+                    except json.JSONDecodeError:
+                        response = {
+                            "status": "error",
+                            "message": "Invalid JSON format"
+                        }
+                    
+                    # Send response
+                    response_json = json.dumps(response)
+                    client_socket.send(response_json.encode('utf-8'))
+                    
+                client_socket.close()
+                
+            except socket.timeout:
+                continue  # Check if server should still run
+            except Exception as e:
+                print(f"Socket error: {e}")
+                
+    except Exception as e:
+        print(f"❌ Server error: {e}")
+    finally:
+        server_socket.close()
+        print("Socket server stopped")
+
+# ============= MAIN PROGRAM =============
+def main():
+    """Main program execution"""
+    global scanning_active, server_running
+    
+    print("\n" + "="*50)
+    print("🔥 FIRE/SMOKE DETECTION SERVO CONTROL SYSTEM")
+    print("="*50)
+    print(f"Servo pins: PAN=GPIO{SERVO_PAN_GPIO}, TILT=GPIO{SERVO_TILT_GPIO}")
+    print(f"Web interface port: {SERVER_PORT}")
+    print(f"Detection hold time: {DETECTION_HOLD_TIME} seconds")
+    print("="*50 + "\n")
+    
+    # Initialize pigpio
+    if not initialize_pigpio():
+        return
+    
+    # Initialize servos
+    center_servos()
+    time.sleep(1)
+    
+    # Start socket server in background
+    server_thread = threading.Thread(target=socket_server)
+    server_thread.daemon = True
+    server_thread.start()
+    
+    # Start scanning pattern in background
+    scan_thread = threading.Thread(target=circular_scanning)
+    scan_thread.daemon = True
+    scan_thread.start()
+    
+    print("✅ System ready and scanning")
+    print("Press Ctrl+C to stop\n")
+    
+    try:
+        # Keep main thread alive
+        while True:
+            time.sleep(1)
+            
+    except KeyboardInterrupt:
+        print("\n\n⏹️ Shutting down...")
+        
+    finally:
+        # Cleanup
+        scanning_active = False
+        server_running = False
+        time.sleep(0.5)
+        
+        # Center and stop servos
+        center_servos()
+        time.sleep(0.5)
+        stop_servos()
+        
+        # Disconnect from pigpio
+        if pi:
+            pi.stop()
+        
+        print("✅ System shutdown complete")
+
+# ============= ENTRY POINT =============
+if __name__ == "__main__":
+    main()
