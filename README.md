@@ -105,16 +105,27 @@ python quantize_model_onnx.py
 ---
 
 ## Photos and Videos
-- Functionality of the entire project
-[![Watch to see how the project works]](project.mp4)
+- Functionality of the entire project:
+<video width="600" controls>
+  <source src="project.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
-- Photos of the e-mail alerts
-[![Smoke detection 1]](smoke_detection1.jpeg)
-[![Smoke detection 2]](smoke_detection2.jpeg)
-[![Fire detection]](fire_detection.jpeg)
+- Photos of the e-mail alerts:
+<p align="center">
+  <img src="smoke_detection1.jpg" alt="Smoke Detection 1" width="500"/>
+</p>
+<p align="center">
+  <img src="smoke_detection2.jpg" alt="Smoke Detection 2" width="500"/>
+</p>
+<p align="center">
+  <img src="fire_detection.jpg" alt="Fire Detection" width="500"/>
+</p>
 
-- Photo of the 3D camera module
-[![3D Camera]](3Dcamera.jpeg)
+- Photo of the 3D camera module:
+<p align="center">
+  <img src="3Dcamera.jpg" alt="3D Camera Module" width="500"/>
+</p>
 
 ---
 
