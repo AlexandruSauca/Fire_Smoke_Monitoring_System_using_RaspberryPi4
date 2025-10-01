@@ -104,6 +104,20 @@ python quantize_model_onnx.py
 
 ---
 
+## Photos and Videos
+- Functionality of the entire project
+[![Watch to see how the project works]](project.mp4)
+
+- Photos of the e-mail alerts
+[![Smoke detection 1]](smoke_detection1.jpeg)
+[![Smoke detection 2]](smoke_detection2.jpeg)
+[![Fire detection]](fire_detection.jpeg)
+
+- Photo of the 3D camera module
+[![3D Camera]](3Dcamera.jpeg)
+
+---
+
 ## Limitations & Future Work
 - Model accuracy depends on dataset variety  
 - Streamlit UI may require optimization for real-time streaming  
@@ -115,9 +129,9 @@ python quantize_model_onnx.py
 This project was developed by a team of 4 members:
 
 - [Alexandru Sauca](https://github.com/AlexandruSauca) – Project Lead, Raspberry Pi Integration, Model Training, Data Augmentation, Quantization, Streaming Method
-- [Cristian Ion](https://github.com/Cristian86Ion) – Web App, Monitoring Dashboard, E-mail receive method, Screenshots of danger event occuring  
+- [Cristian Ion](https://github.com/Cristian86Ion) – Web App, Monitoring Dashboard, E-mail Receive Method, Screenshots of Danger Event Occurring  
 - [Gruia Rojisteanu](https://github.com/MiguCitric) – Raspberry Pi Integration, Streaming Method, Servos Solution  
-- [Alexandru Barbu](https://github.com/AlexBrb278) – Model Training, Quantiaztion
+- [Alexandru Barbu](https://github.com/AlexBrb278) – Model Training, Quantiaztion, 3D Camera Design
 
 ---
 
