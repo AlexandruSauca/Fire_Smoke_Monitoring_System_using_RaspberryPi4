@@ -35,7 +35,7 @@ The system integrates:
 ├── best_80map.pt / .onnx       # Trained YOLOv8s models
 ├── best_albumentations.pt      # Augmentation-trained model
 ├── quantized_model.onnx        # Optimized model for deployment
-├── pi_monitoring.py            # Main monitoring script on Pi
+├── pi_monitoring.py            # Attempt monitoring script on Pi(this file has no effect)
 ├── web_app.py                  # Streamlit-based monitoring dashboard
 ├── servo_code.py.txt           # Servo rotation control
 ├── start_stream.sh             # Stream start script
