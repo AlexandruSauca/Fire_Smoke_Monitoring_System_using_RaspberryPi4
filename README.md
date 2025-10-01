@@ -129,7 +129,7 @@ python quantize_model_onnx.py
 This project was developed by a team of 4 members:
 
 - [Alexandru Sauca](https://github.com/AlexandruSauca) – Project Lead, Raspberry Pi Integration, Model Training, Data Augmentation, Quantization, Streaming Method
-- [Cristian Ion](https://github.com/Cristian86Ion) – Web App, Monitoring Dashboard, E-mail Receive Method, Screenshots of Danger Event Occurring  
+- [Cristian Ion](https://github.com/Cristian86Ion) – Web App, Monitoring Dashboard, E-mail Receive Method, Screenshots of Danger Event Occurring, 3D Camera Design  
 - [Gruia Rojisteanu](https://github.com/MiguCitric) – Raspberry Pi Integration, Streaming Method, Servos Solution  
 - [Alexandru Barbu](https://github.com/AlexBrb278) – Model Training, Quantiaztion, 3D Camera Design
 
